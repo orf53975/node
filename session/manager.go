@@ -24,6 +24,7 @@ import (
 
 	"github.com/mysteriumnetwork/node/identity"
 	"github.com/mysteriumnetwork/node/market"
+	"github.com/mysteriumnetwork/node/session/balance"
 )
 
 var (
@@ -70,12 +71,14 @@ func NewManager(
 	idGenerator IDGenerator,
 	sessionStorage Storage,
 	promiseProcessor PromiseProcessor,
+	balanceTrackerFactory func() *balance.ProviderBalanceTracker,
 ) *Manager {
 	return &Manager{
-		currentProposal:  currentProposal,
-		generateID:       idGenerator,
-		sessionStorage:   sessionStorage,
-		promiseProcessor: promiseProcessor,
+		currentProposal:       currentProposal,
+		generateID:            idGenerator,
+		sessionStorage:        sessionStorage,
+		promiseProcessor:      promiseProcessor,
+		balanceTrackerFactory: balanceTrackerFactory,
 
 		creationLock: sync.Mutex{},
 	}
@@ -83,11 +86,12 @@ func NewManager(
 
 // Manager knows how to start and provision session
 type Manager struct {
-	currentProposal  market.ServiceProposal
-	generateID       IDGenerator
-	provideConfig    ConfigProvider
-	sessionStorage   Storage
-	promiseProcessor PromiseProcessor
+	currentProposal       market.ServiceProposal
+	generateID            IDGenerator
+	provideConfig         ConfigProvider
+	sessionStorage        Storage
+	promiseProcessor      PromiseProcessor
+	balanceTrackerFactory func() *balance.ProviderBalanceTracker
 
 	creationLock sync.Mutex
 }
@@ -107,10 +111,20 @@ func (manager *Manager) Create(consumerID identity.Identity, proposalID int, con
 		return
 	}
 
+	sessionInstance.BalanceKeeper = manager.balanceTrackerFactory()
+
 	err = manager.promiseProcessor.Start(manager.currentProposal)
 	if err != nil {
 		return
 	}
+
+	go func() {
+		err := sessionInstance.BalanceKeeper.Track()
+		if err != nil {
+			// TODO: log and handle and destroy session?
+			// manager.Destroy(consumerID, string(sessionInstance.ID))
+		}
+	}()
 
 	sessionInstance.DestroyCallback = destroyCallback
 	manager.sessionStorage.Add(sessionInstance)
@@ -136,6 +150,8 @@ func (manager *Manager) Destroy(consumerID identity.Identity, sessionID string) 
 	if err != nil {
 		return err
 	}
+
+	sessionInstance.BalanceKeeper.Stop()
 
 	manager.sessionStorage.Remove(ID(sessionID))
 
