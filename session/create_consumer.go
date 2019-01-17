@@ -56,6 +56,8 @@ func (consumer *createConsumer) Consume(requestPtr interface{}) (response interf
 		return responseInternalError, err
 	}
 
+	// TODO: consume the consumerInfo here from the request
+	// Session is the obvious choice for this
 	sessionInstance, err := consumer.sessionCreator.Create(consumer.peerID, request.ProposalId, config, destroyCallback)
 	switch err {
 	case nil:

@@ -30,11 +30,13 @@ var (
 	currentProposal   = market.ServiceProposal{
 		ID: currentProposalID,
 	}
+	balanceKeeper   = &mockBalanceTracker{}
 	expectedID      = ID("mocked-id")
 	expectedSession = Session{
-		ID:         expectedID,
-		Config:     expectedSessionConfig,
-		ConsumerID: identity.FromAddress("deadbeef"),
+		ID:            expectedID,
+		Config:        expectedSessionConfig,
+		ConsumerID:    identity.FromAddress("deadbeef"),
+		BalanceKeeper: balanceKeeper,
 	}
 	lastSession Session
 )
@@ -61,9 +63,23 @@ func (processor *fakePromiseProcessor) Stop() error {
 	return nil
 }
 
+type mockBalanceTracker struct{}
+
+func (mbt *mockBalanceTracker) Track() error {
+	return nil
+}
+
+func (mbt *mockBalanceTracker) Stop() {
+
+}
+
+func mockBalanceTrackerFactory() BalanceKeeper {
+	return balanceKeeper
+}
+
 func TestManager_Create_StoresSession(t *testing.T) {
 	sessionStore := NewStorageMemory()
-	manager := NewManager(currentProposal, generateSessionID, sessionStore, &fakePromiseProcessor{})
+	manager := NewManager(currentProposal, generateSessionID, sessionStore, &fakePromiseProcessor{}, mockBalanceTrackerFactory)
 
 	sessionInstance, err := manager.Create(identity.FromAddress("deadbeef"), currentProposalID, expectedSessionConfig, nil)
 	assert.NoError(t, err)
@@ -72,7 +88,7 @@ func TestManager_Create_StoresSession(t *testing.T) {
 
 func TestManager_Create_RejectsUnknownProposal(t *testing.T) {
 	sessionStore := NewStorageMemory()
-	manager := NewManager(currentProposal, generateSessionID, sessionStore, &fakePromiseProcessor{})
+	manager := NewManager(currentProposal, generateSessionID, sessionStore, &fakePromiseProcessor{}, mockBalanceTrackerFactory)
 
 	sessionInstance, err := manager.Create(identity.FromAddress("deadbeef"), 69, expectedSessionConfig, nil)
 	assert.Exactly(t, err, ErrorInvalidProposal)
@@ -82,7 +98,7 @@ func TestManager_Create_RejectsUnknownProposal(t *testing.T) {
 func TestManager_Create_StartsPromiseProcessor(t *testing.T) {
 	promiseProcessor := &fakePromiseProcessor{}
 	sessionStore := NewStorageMemory()
-	manager := NewManager(currentProposal, generateSessionID, sessionStore, promiseProcessor)
+	manager := NewManager(currentProposal, generateSessionID, sessionStore, promiseProcessor, mockBalanceTrackerFactory)
 
 	_, err := manager.Create(identity.FromAddress("deadbeef"), currentProposalID, expectedSessionConfig, nil)
 	assert.NoError(t, err)
