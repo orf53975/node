@@ -66,7 +66,11 @@ func (consumer *createConsumer) Consume(requestPtr interface{}) (response interf
 			SequenceID: 1,
 			Amount:     0,
 		}
-		return responseWithSession(sessionInstance, lastPromise), nil
+		pi := PaymentInfo{
+			LastPromise: lastPromise,
+			FreeCredit:  100,
+		}
+		return responseWithSession(sessionInstance, pi), nil
 	case ErrorInvalidProposal:
 		return responseInvalidProposal, nil
 	default:
@@ -74,7 +78,7 @@ func (consumer *createConsumer) Consume(requestPtr interface{}) (response interf
 	}
 }
 
-func responseWithSession(sessionInstance Session, lp LastPromise) CreateResponse {
+func responseWithSession(sessionInstance Session, pi PaymentInfo) CreateResponse {
 	serializedConfig, err := json.Marshal(sessionInstance.Config)
 	if err != nil {
 		// Failed to serialize session
@@ -88,6 +92,6 @@ func responseWithSession(sessionInstance Session, lp LastPromise) CreateResponse
 			ID:     sessionInstance.ID,
 			Config: serializedConfig,
 		},
-		LastPromise: &lp,
+		PaymentInfo: &pi,
 	}
 }
