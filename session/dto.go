@@ -30,11 +30,10 @@ type PaymentOrchestrator interface {
 
 // Session structure holds all required information about current session between service consumer and provider
 type Session struct {
-	ID                  ID
-	Config              ServiceConfiguration
-	ConsumerID          identity.Identity
-	DestroyCallback     DestroyCallback
-	PaymentOrchestrator PaymentOrchestrator
+	ID              ID
+	Config          ServiceConfiguration
+	ConsumerID      identity.Identity
+	DestroyCallback DestroyCallback
 }
 
 // ServiceConfiguration defines service configuration from underlying transport mechanism to be passed to remote party

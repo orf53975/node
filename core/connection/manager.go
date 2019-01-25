@@ -128,9 +128,9 @@ type MockPromiseTracker struct {
 	errToReturn     error
 }
 
-func (mpt *MockPromiseTracker) AlignStateWithProvider(providerState promise.State) {
+func (mpt *MockPromiseTracker) AlignStateWithProvider(providerState promise.State) error {
 	// in this case we just do nothing really
-	return
+	return nil
 }
 
 func (mpt *MockPromiseTracker) IssuePromiseWithAddedAmount(amountToAdd int64) (promises.IssuedPromise, error) {
@@ -147,8 +147,9 @@ func (manager *connectionManager) startConnection(consumerID identity.Identity, 
 		manager.cleanConnection = func() {
 			manager.status = statusDisconnecting()
 			cancelCtx()
-			for _, f := range cancel {
-				f()
+			//call cancel functions in reverse order of addition
+			for i := len(cancel) - 1; i >= 0; i-- {
+				cancel[i]()
 			}
 		}
 		if err != nil {

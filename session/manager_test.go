@@ -30,13 +30,11 @@ var (
 	currentProposal   = market.ServiceProposal{
 		ID: currentProposalID,
 	}
-	balanceKeeper   = &mockBalanceTracker{}
 	expectedID      = ID("mocked-id")
 	expectedSession = Session{
-		ID:            expectedID,
-		Config:        expectedSessionConfig,
-		ConsumerID:    identity.FromAddress("deadbeef"),
-		BalanceKeeper: balanceKeeper,
+		ID:         expectedID,
+		Config:     expectedSessionConfig,
+		ConsumerID: identity.FromAddress("deadbeef"),
 	}
 	lastSession Session
 )
@@ -63,32 +61,34 @@ func (processor *fakePromiseProcessor) Stop() error {
 	return nil
 }
 
-type mockBalanceTracker struct{}
-
-func (mbt *mockBalanceTracker) Track() error {
-	return nil
+type mockPaymentOrchestrator struct {
+	errChan chan error
 }
 
-func (mbt *mockBalanceTracker) Stop() {
+func (m mockPaymentOrchestrator) Start() <-chan error {
+	return m.errChan
+}
+
+func (m mockPaymentOrchestrator) Stop() {
 
 }
 
-func mockBalanceTrackerFactory() BalanceKeeper {
-	return balanceKeeper
+func mockPaymentOrchestratorFactory() PaymentOrchestrator {
+	return &mockPaymentOrchestrator{}
 }
 
 func TestManager_Create_StoresSession(t *testing.T) {
 	sessionStore := NewStorageMemory()
-	manager := NewManager(currentProposal, generateSessionID, sessionStore, &fakePromiseProcessor{}, mockBalanceTrackerFactory)
+	manager := NewManager(currentProposal, generateSessionID, sessionStore, &fakePromiseProcessor{}, mockPaymentOrchestratorFactory)
 
 	sessionInstance, err := manager.Create(identity.FromAddress("deadbeef"), currentProposalID, expectedSessionConfig, nil)
 	assert.NoError(t, err)
-	assert.Exactly(t, expectedSession, sessionInstance)
+	assert.Equal(t, expectedSession, sessionInstance)
 }
 
 func TestManager_Create_RejectsUnknownProposal(t *testing.T) {
 	sessionStore := NewStorageMemory()
-	manager := NewManager(currentProposal, generateSessionID, sessionStore, &fakePromiseProcessor{}, mockBalanceTrackerFactory)
+	manager := NewManager(currentProposal, generateSessionID, sessionStore, &fakePromiseProcessor{}, mockPaymentOrchestratorFactory)
 
 	sessionInstance, err := manager.Create(identity.FromAddress("deadbeef"), 69, expectedSessionConfig, nil)
 	assert.Exactly(t, err, ErrorInvalidProposal)
@@ -98,7 +98,7 @@ func TestManager_Create_RejectsUnknownProposal(t *testing.T) {
 func TestManager_Create_StartsPromiseProcessor(t *testing.T) {
 	promiseProcessor := &fakePromiseProcessor{}
 	sessionStore := NewStorageMemory()
-	manager := NewManager(currentProposal, generateSessionID, sessionStore, promiseProcessor, mockBalanceTrackerFactory)
+	manager := NewManager(currentProposal, generateSessionID, sessionStore, promiseProcessor, mockPaymentOrchestratorFactory)
 
 	_, err := manager.Create(identity.FromAddress("deadbeef"), currentProposalID, expectedSessionConfig, nil)
 	assert.NoError(t, err)
