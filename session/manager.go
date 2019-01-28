@@ -21,10 +21,14 @@ import (
 	"encoding/json"
 	"errors"
 	"sync"
+	"time"
 
+	log "github.com/cihub/seelog"
 	"github.com/mysteriumnetwork/node/identity"
 	"github.com/mysteriumnetwork/node/market"
 )
+
+const logPrefix = "[session-manager] "
 
 var (
 	// ErrorInvalidProposal is validation error then invalid proposal requested for session creation
@@ -47,7 +51,8 @@ type ConfigNegotiator interface {
 type ConfigProvider func(consumerKey json.RawMessage) (ServiceConfiguration, DestroyCallback, error)
 
 // DestroyCallback cleanups session
-type DestroyCallback func() error
+// TODO get rid of this Destroy Callback and dryRun once we will have a better session lifecycle management.
+type DestroyCallback func(dryRun bool) error
 
 // PromiseProcessor processes promises at provider side.
 // Provider checks promises from consumer and signs them also.
@@ -114,6 +119,9 @@ func (manager *Manager) Create(consumerID identity.Identity, proposalID int, con
 
 	sessionInstance.DestroyCallback = destroyCallback
 	manager.sessionStorage.Add(sessionInstance)
+
+	go manager.waitSessionEnd(sessionInstance.ID)
+
 	return sessionInstance, nil
 }
 
@@ -140,7 +148,7 @@ func (manager *Manager) Destroy(consumerID identity.Identity, sessionID string) 
 	manager.sessionStorage.Remove(ID(sessionID))
 
 	if sessionInstance.DestroyCallback != nil {
-		return sessionInstance.DestroyCallback()
+		return sessionInstance.DestroyCallback(!dryRun)
 	}
 	return nil
 }
@@ -153,4 +161,25 @@ func (manager *Manager) createSession(consumerID identity.Identity, config Servi
 	sessionInstance.ConsumerID = consumerID
 	sessionInstance.Config = config
 	return
+}
+
+func (manager *Manager) waitSessionEnd(id ID) {
+	for range time.NewTicker(time.Minute).C {
+		session, ok := manager.sessionStorage.Find(id)
+		if !ok || session.DestroyCallback == nil {
+			return
+		}
+
+		if err := session.DestroyCallback(dryRun); err == ErrSessionStileAlive {
+			continue
+		} else if err != nil {
+			log.Error(logPrefix, "Failed to monitor if session is active: ", err)
+		}
+
+		log.Info(logPrefix, "Cleaning inactive session: ", session.ID)
+		if err := manager.Destroy(session.ConsumerID, string(session.ID)); err != nil {
+			log.Error(logPrefix, "Failed to destroy session: ", err)
+		}
+		return
+	}
 }

@@ -20,6 +20,7 @@ package service
 import (
 	"encoding/json"
 	"sync"
+	"time"
 
 	log "github.com/cihub/seelog"
 	"github.com/mysteriumnetwork/node/identity"
@@ -96,7 +97,31 @@ func (manager *Manager) ProvideConfig(publicKey json.RawMessage) (session.Servic
 		return nil, nil, err
 	}
 
-	return config, connectionEndpoint.Stop, nil
+	destroyCallback := func(dryRun bool) error {
+		if !dryRun {
+			return connectionEndpoint.Stop()
+		}
+
+		if isSessionAlive(connectionEndpoint) {
+			return session.ErrSessionStileAlive
+		}
+		return nil
+	}
+
+	return config, destroyCallback, nil
+}
+
+func isSessionAlive(ce wg.ConnectionEndpoint) bool {
+	_, lastHandshake, err := ce.PeerStats()
+	if err != nil {
+		log.Error(logPrefix, "Failed to check if the session active: ", err)
+		return false
+	}
+
+	if lastHandshake > 0 && time.Since(time.Unix(int64(lastHandshake), 0)) > 2*time.Hour {
+		return false
+	}
+	return true
 }
 
 // Serve starts service - does block

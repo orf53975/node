@@ -17,7 +17,11 @@
 
 package session
 
-import "github.com/mysteriumnetwork/node/identity"
+import (
+	"errors"
+
+	"github.com/mysteriumnetwork/node/identity"
+)
 
 // ID represents session id type
 type ID string
@@ -33,3 +37,8 @@ type Session struct {
 // ServiceConfiguration defines service configuration from underlying transport mechanism to be passed to remote party
 // should be serializable to json format
 type ServiceConfiguration interface{}
+
+// ErrSessionStileAlive indicates that the session is active and should not be destoyed.
+var ErrSessionStileAlive = errors.New("session stile alive")
+
+var dryRun = true
